@@ -1,0 +1,15 @@
+# Node.js
+node_modules/
+dist/
+.env
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# VSCode
+.vscode/
