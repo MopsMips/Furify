@@ -1,8 +1,15 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import {
+    SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    MessageComponentInteraction
+} from 'discord.js';
+
+// Erlaubt beide Interaktionstypen: Slash-Command & Button
+export type AnyInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
 
 export interface Command {
     data: SlashCommandBuilder;
-    execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
+    execute: (interaction: AnyInteraction) => Promise<void>;
 }
 
 export interface QueueItem {

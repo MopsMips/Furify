@@ -1,22 +1,47 @@
-import { SlashCommandBuilder } from 'discord.js';
-import type { Command } from '../types/command';
+import {
+    SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    MessageComponentInteraction,
+    InteractionReplyOptions,
+    MessageFlags
+} from 'discord.js';
 import { players } from '../core/player';
 
-export const command: Command = {
+type AnyInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
+
+export default {
     data: new SlashCommandBuilder()
         .setName('skip')
         .setDescription('Überspringt den aktuellen Song'),
 
-    async execute(interaction) {
-        const guildId = interaction.guildId!;
-        const player = players.get(guildId);
-
-        if (!player) {
-            await interaction.reply('⚠️ Es läuft gerade keine Musik.');
-            return;
+    async execute(interaction: AnyInteraction) {
+        const guild = interaction.guild;
+        if (!guild) {
+            return interaction.reply({
+                content: '❌ Fehler: Kein Server gefunden.',
+                flags: MessageFlags.Ephemeral
+            });
         }
 
-        player.stop(); // stop() löst playNext() automatisch aus
-        await interaction.reply('⏭️ Song übersprungen!');
+        const player = players.get(guild.id);
+        if (!player) {
+            return interaction.reply({
+                content: '⚠️ Es läuft gerade keine Musik.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        player.stop(); // Springt zum nächsten Song (falls vorhanden)
+
+        const response: InteractionReplyOptions = {
+            content: '⏭️ Song übersprungen!',
+            flags: MessageFlags.Ephemeral
+        };
+
+        if (interaction.deferred || interaction.replied) {
+            await interaction.followUp(response);
+        } else {
+            await interaction.reply(response);
+        }
     },
 };

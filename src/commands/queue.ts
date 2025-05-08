@@ -1,13 +1,12 @@
-import { SlashCommandBuilder } from 'discord.js';
-import type { Command } from '../types/command';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { queues } from '../core/player';
 
-export const command: Command = {
+export default {
     data: new SlashCommandBuilder()
         .setName('queue')
         .setDescription('Zeigt die aktuelle Warteschlange'),
 
-    async execute(interaction) {
+    async execute(interaction: ChatInputCommandInteraction) {
         const guildId = interaction.guildId!;
         const queue = queues.get(guildId);
 

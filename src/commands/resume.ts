@@ -1,13 +1,12 @@
-import { SlashCommandBuilder } from 'discord.js';
-import type { Command } from '../types/command';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { players } from '../core/player';
 
-export const command: Command = {
+export default {
     data: new SlashCommandBuilder()
         .setName('resume')
         .setDescription('Setzt die Wiedergabe fort'),
 
-    async execute(interaction) {
+    async execute(interaction: ChatInputCommandInteraction) {
         const guildId = interaction.guildId!;
         const player = players.get(guildId);
 
