@@ -50,7 +50,6 @@ export async function renderPlaybackUI(
                 ? queue.slice(0, 3).map((track, i) => `${i + 1}. [${track.title}](${track.url})`).join('\n')
                 : 'Keine weiteren Titel in der Warteschlange.',
         })
-        .setFooter({ text: '⏯ Pause/Play | ⏭ Skip | ⏹ Stop' });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId('pause').setLabel('⏯ Pause/Play').setStyle(ButtonStyle.Primary),
@@ -156,6 +155,9 @@ export async function renderPlaybackUI(
     });
 
     collector.on('end', stopProgressUpdater);
+
+    client.uiMessages ??= new Map();
+    client.uiMessages.set(guildId, message);
 
     return message;
 }

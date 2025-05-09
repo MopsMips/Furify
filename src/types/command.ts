@@ -4,7 +4,6 @@ import {
     MessageComponentInteraction
 } from 'discord.js';
 
-// Erlaubt beide Interaktionstypen: Slash-Command & Button
 export type AnyInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
 
 export interface Command {

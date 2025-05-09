@@ -29,6 +29,7 @@ export default {
 
         const client = interaction.client as FurifyClient;
         await interaction.reply({ content: '🔄 Lade den Song...' });
+        const loadingMessage = await interaction.fetchReply();
 
         let song;
         try {
@@ -39,8 +40,9 @@ export default {
             return interaction.followUp({ content: '❌ Fehler beim Laden des Songs.' });
         }
 
-        // ✅ Textchannel absichern (z. B. auch Threads)
-        const textChannel = interaction.channel?.isTextBased() ? interaction.channel as TextBasedChannel : undefined;
+        const textChannel = interaction.channel?.isTextBased()
+            ? interaction.channel as TextBasedChannel
+            : undefined;
 
         const result = await client.player.connectAndPlay(
             voiceChannel,
@@ -50,11 +52,14 @@ export default {
         );
 
         if (result === 'queued') {
-            return interaction.followUp({
+            await loadingMessage.delete();
+            await interaction.followUp({
                 content: `📥 **${song.title}** wurde zur Warteschlange hinzugefügt.`,
             });
+            return;
         }
 
+        await loadingMessage.delete();
         return;
     },
 };

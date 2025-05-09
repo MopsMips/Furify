@@ -3,7 +3,6 @@ import { REST, Routes, Events, MessageFlags, Collection } from 'discord.js';
 import { config } from 'dotenv';
 import type { Command } from '../types/command';
 
-// 🔁 Alle Commands als default-Exports importieren
 import play from './play';
 import skip from './skip';
 import stop from './stop';
@@ -13,16 +12,13 @@ import queue from './queue';
 
 config();
 
-// ✅ Typisiertes Commands-Array
 const commands = [play, skip, stop, pause, resume, queue] as Command[];
 
-// 🔐 Commands im Client registrieren (wichtig für Buttons z. B. in play.ts)
 client.commands = new Collection<string, Command>();
 for (const command of commands) {
     client.commands.set(command.data.name, command);
 }
 
-// 🚀 Slash-Commands bei Bot-Start global registrieren
 client.once(Events.ClientReady, async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN!);
 
@@ -37,7 +33,6 @@ client.once(Events.ClientReady, async () => {
     }
 });
 
-// 🎮 Command-Ausführung bei Interaktion
 client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 

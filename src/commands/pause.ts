@@ -2,8 +2,6 @@ import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
     MessageComponentInteraction,
-    InteractionReplyOptions,
-    MessageFlags
 } from 'discord.js';
 import { FurifyClient } from '../core/client';
 
@@ -16,46 +14,33 @@ export default {
 
     async execute(interaction: AnyInteraction) {
         const guild = interaction.guild;
-        if (!guild) {
-            return interaction.reply({
-                content: '❌ Fehler: Kein Server gefunden.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
+        if (!guild) return;
 
         const client = interaction.client as FurifyClient;
         const guildId = guild.id;
         const player = (client.player as any).players?.get(guildId);
 
         if (!player) {
-            return interaction.reply({
-                content: '⚠️ Es läuft gerade keine Musik.',
-                flags: MessageFlags.Ephemeral
-            });
+            if (interaction.isMessageComponent()) {
+                await interaction.deferUpdate();
+            } else {
+                await interaction.reply({ content: '⚠️ Es läuft gerade keine Musik.', ephemeral: true });
+            }
+            return;
         }
 
         const status = player.state.status;
-        let message = '';
 
         if (status === 'paused') {
-            const resumed = client.player.resume(guildId);
-            message = resumed ? '▶️ Wiedergabe fortgesetzt.' : '⚠️ Konnte nicht fortsetzen.';
+            client.player.resume(guildId);
         } else if (status === 'playing') {
-            const paused = client.player.pause(guildId);
-            message = paused ? '⏸️ Wiedergabe pausiert.' : '⚠️ Konnte nicht pausieren.';
-        } else {
-            message = '⚠️ Keine Wiedergabe aktiv.';
+            client.player.pause(guildId);
         }
 
-        const response: InteractionReplyOptions = {
-            content: message,
-            flags: MessageFlags.Ephemeral
-        };
-
-        if (interaction.deferred || interaction.replied) {
-            await interaction.followUp(response);
+        if (interaction.isMessageComponent()) {
+            await interaction.deferUpdate();
         } else {
-            await interaction.reply(response);
+            await interaction.reply({ content: '⏯️ Wiedergabe geändert.', ephemeral: true });
         }
     }
 };

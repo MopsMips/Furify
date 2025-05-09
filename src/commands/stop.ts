@@ -2,8 +2,6 @@ import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
     MessageComponentInteraction,
-    InteractionReplyOptions,
-    MessageFlags
 } from 'discord.js';
 import { getVoiceConnection } from '@discordjs/voice';
 import { FurifyClient } from '../core/client';
@@ -17,15 +15,20 @@ export default {
 
     async execute(interaction: AnyInteraction) {
         const guild = interaction.guild;
-        if (!guild) {
-            return interaction.reply({
-                content: '❌ Fehler: Kein Server gefunden.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
+        if (!guild) return;
 
         const client = interaction.client as FurifyClient;
         const guildId = guild.id;
+
+        const uiMessage = client.uiMessages?.get(guildId);
+        if (uiMessage && uiMessage.deletable) {
+            try {
+                await uiMessage.delete();
+            } catch (err) {
+                console.warn('⚠️ Konnte UI-Nachricht nicht löschen:', err);
+            }
+        }
+        client.uiMessages?.delete(guildId);
 
         const player = (client.player as any).players?.get(guildId);
         if (player) player.stop();
@@ -33,19 +36,16 @@ export default {
         client.player.clearQueue(guildId);
         getVoiceConnection(guildId)?.destroy();
 
-        // Optional: player + connection löschen, falls du das manuell brauchst
         (client.player as any).players?.delete(guildId);
         (client.player as any).connections?.delete(guildId);
 
-        const response: InteractionReplyOptions = {
-            content: '⏹️ Musik gestoppt und Warteschlange geleert.',
-            flags: MessageFlags.Ephemeral
-        };
-
-        if (interaction.deferred || interaction.replied) {
-            await interaction.followUp(response);
+        if (interaction.isMessageComponent()) {
+            await interaction.deferUpdate();
         } else {
-            await interaction.reply(response);
+            await interaction.reply({
+                content: '⏹️ Musik gestoppt und Warteschlange geleert.',
+                ephemeral: true,
+            });
         }
     },
 };

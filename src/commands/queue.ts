@@ -20,7 +20,7 @@ export default {
         }
 
         const list = queue.tracks
-            .slice(0, 10) // Max. 10 Einträge anzeigen
+            .slice(0, 10)
             .map((track, index) => `${index + 1}. [${track.title}](${track.url})`)
             .join('\n');
 

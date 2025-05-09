@@ -21,7 +21,7 @@ export async function getSongFromUrl(url: string): Promise<{ title: string; url:
                 resolve({
                     title: data.title,
                     url: data.webpage_url,
-                    duration: data.duration ? data.duration * 1000 : 0, // in Millisekunden
+                    duration: data.duration ? data.duration * 1000 : 0,
                 });
             } catch (e) {
                 console.error('Fehler beim Parsen der yt-dlp-Ausgabe:', e);

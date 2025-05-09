@@ -137,7 +137,6 @@ export class Player {
             }
         }
 
-        // ✅ sicheres rendern nur wenn .send() verfügbar ist
         if (
             textChannel &&
             'send' in textChannel &&
@@ -155,7 +154,7 @@ export class Player {
         }
 
         player.once(AudioPlayerStatus.Idle, () => {
-            setTimeout(() => {
+            setTimeout(async () => {
                 const stillIdle = player.state.status === AudioPlayerStatus.Idle;
                 const isQueueEmpty = !this.queues.get(guildId)?.length;
 
@@ -165,6 +164,18 @@ export class Player {
                     this.players.delete(guildId);
                     this.connections.delete(guildId);
                     this.currentMessages.delete(guildId);
+
+                    const furify = this.client as FurifyClient;
+                    const uiMsg = furify.uiMessages?.get(guildId);
+                    if (uiMsg && uiMsg.deletable) {
+                        try {
+                            await uiMsg.delete();
+                        } catch (err) {
+                            console.warn('⚠️ Konnte UI-Nachricht beim Auto-Leave nicht löschen:', err);
+                        }
+                    }
+                    furify.uiMessages?.delete(guildId);
+
                     console.log(`👋 Bot hat den Sprachkanal in Guild ${guildId} verlassen (Auto-Leave).`);
                 }
             }, AUTO_LEAVE_TIMEOUT);
@@ -199,7 +210,7 @@ export class Player {
         const player = this.players.get(guildId);
         if (!player) return false;
         try {
-            player.stop(); // Triggert automatisch playNext()
+            player.stop();
             return true;
         } catch (error) {
             console.error(`❌ Fehler beim Skippen in Guild ${guildId}:`, error);
