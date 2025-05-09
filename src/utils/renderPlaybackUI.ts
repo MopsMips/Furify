@@ -146,15 +146,27 @@ export async function renderPlaybackUI(
         } catch (err) {
             console.error('❌ Fehler bei Button-Interaktion:', err);
             if (!i.replied && !i.deferred) {
-                await i.reply({
-                    content: '❌ Fehler bei der Button-Ausführung.',
-                    ephemeral: true,
-                });
+                try {
+                    await i.reply({
+                        content: '❌ Fehler bei der Button-Ausführung.',
+                        flags: 64
+                    });
+                } catch (err: any) {
+                    if (err.code === 10062) {
+                        console.warn('⚠️ Interaktion war bereits abgelaufen (Unknown Interaction).');
+                    } else {
+                        console.error('❌ Fehler beim Senden der Fehlerantwort:', err);
+                    }
+                }
             }
         }
     });
 
     collector.on('end', stopProgressUpdater);
+
+    client.botMessages ??= new Map();
+    const existing = client.botMessages.get(guildId) ?? [];
+    client.botMessages.set(guildId, [...existing, message]);
 
     client.uiMessages ??= new Map();
     client.uiMessages.set(guildId, message);

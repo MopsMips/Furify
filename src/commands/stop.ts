@@ -20,15 +20,19 @@ export default {
         const client = interaction.client as FurifyClient;
         const guildId = guild.id;
 
-        const uiMessage = client.uiMessages?.get(guildId);
-        if (uiMessage && uiMessage.deletable) {
-            try {
-                await uiMessage.delete();
-            } catch (err) {
-                console.warn('⚠️ Konnte UI-Nachricht nicht löschen:', err);
+        const messages = client.botMessages?.get(guildId);
+        if (messages?.length) {
+            for (const msg of messages) {
+                if (msg.deletable) {
+                    try {
+                        await msg.delete();
+                    } catch (err) {
+                        console.warn('⚠️ Konnte Bot-Nachricht nicht löschen:', err);
+                    }
+                }
             }
+            client.botMessages.delete(guildId);
         }
-        client.uiMessages?.delete(guildId);
 
         const player = (client.player as any).players?.get(guildId);
         if (player) player.stop();

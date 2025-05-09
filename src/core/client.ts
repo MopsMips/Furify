@@ -13,7 +13,7 @@ export class FurifyClient extends Client {
     public commands: Collection<string, Command> = new Collection();
     public player!: Player;
     public uiMessages: Map<string, Message> = new Map();
-
+    public botMessages: Map<string, Message[]> = new Map();
     constructor() {
         super({
             intents: [

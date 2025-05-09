@@ -31,13 +31,19 @@ export default {
         await interaction.reply({ content: '🔄 Lade den Song...' });
         const loadingMessage = await interaction.fetchReply();
 
+
+        const existing = client.botMessages.get(interaction.guildId!) ?? [];
+        client.botMessages.set(interaction.guildId!, [...existing, loadingMessage]);
+
         let song;
         try {
             const fetched = await getSongFromUrl(url);
             if (!fetched) throw new Error();
             song = fetched;
         } catch {
-            return interaction.followUp({ content: '❌ Fehler beim Laden des Songs.' });
+            const errorMsg = await interaction.followUp({ content: '❌ Fehler beim Laden des Songs.' });
+            client.botMessages.set(interaction.guildId!, [...(client.botMessages.get(interaction.guildId!) ?? []), errorMsg]);
+            return;
         }
 
         const textChannel = interaction.channel?.isTextBased()
@@ -53,9 +59,10 @@ export default {
 
         if (result === 'queued') {
             await loadingMessage.delete();
-            await interaction.followUp({
+            const queueMsg = await interaction.followUp({
                 content: `📥 **${song.title}** wurde zur Warteschlange hinzugefügt.`,
             });
+            client.botMessages.set(interaction.guildId!, [...(client.botMessages.get(interaction.guildId!) ?? []), queueMsg]);
             return;
         }
 
