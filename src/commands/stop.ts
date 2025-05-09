@@ -5,8 +5,8 @@ import {
     InteractionReplyOptions,
     MessageFlags
 } from 'discord.js';
-import { connections, players, queues } from '../core/player';
 import { getVoiceConnection } from '@discordjs/voice';
+import { FurifyClient } from '../core/client';
 
 type AnyInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
 
@@ -24,14 +24,18 @@ export default {
             });
         }
 
+        const client = interaction.client as FurifyClient;
         const guildId = guild.id;
 
-        players.get(guildId)?.stop();
-        queues.set(guildId, []);
+        const player = (client.player as any).players?.get(guildId);
+        if (player) player.stop();
+
+        client.player.clearQueue(guildId);
         getVoiceConnection(guildId)?.destroy();
 
-        players.delete(guildId);
-        connections.delete(guildId);
+        // Optional: player + connection löschen, falls du das manuell brauchst
+        (client.player as any).players?.delete(guildId);
+        (client.player as any).connections?.delete(guildId);
 
         const response: InteractionReplyOptions = {
             content: '⏹️ Musik gestoppt und Warteschlange geleert.',

@@ -1,5 +1,5 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
-import { players } from '../core/player';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { FurifyClient } from '../core/client';
 
 export default {
     data: new SlashCommandBuilder()
@@ -7,20 +7,27 @@ export default {
         .setDescription('Setzt die Wiedergabe fort'),
 
     async execute(interaction: ChatInputCommandInteraction) {
-        const guildId = interaction.guildId!;
-        const player = players.get(guildId);
-
-        if (!player) {
-            await interaction.reply('⚠️ Es läuft gerade keine Musik.');
-            return;
+        const guild = interaction.guild;
+        if (!guild) {
+            return interaction.reply({
+                content: '❌ Fehler: Kein Server gefunden.',
+                flags: MessageFlags.Ephemeral,
+            });
         }
 
-        const success = player.unpause();
+        const client = interaction.client as FurifyClient;
+        const success = client.player.resume(guild.id);
 
         if (success) {
-            await interaction.reply('▶️ Wiedergabe fortgesetzt.');
+            await interaction.reply({
+                content: '▶️ Wiedergabe fortgesetzt.',
+                flags: MessageFlags.Ephemeral,
+            });
         } else {
-            await interaction.reply('⚠️ Wiedergabe konnte nicht fortgesetzt werden.');
+            await interaction.reply({
+                content: '⚠️ Wiedergabe konnte nicht fortgesetzt werden.',
+                flags: MessageFlags.Ephemeral,
+            });
         }
     },
 };

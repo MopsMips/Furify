@@ -8,7 +8,7 @@ export function getYtDlpStream(url: string): ChildProcess {
     });
 }
 
-export async function getSongFromUrl(url: string): Promise<{ title: string; url: string } | null> {
+export async function getSongFromUrl(url: string): Promise<{ title: string; url: string; duration: number } | null> {
     return new Promise((resolve, reject) => {
         execFile(ytDlpPath, ['--dump-json', url], (error, stdout, stderr) => {
             if (error) {
@@ -18,7 +18,11 @@ export async function getSongFromUrl(url: string): Promise<{ title: string; url:
 
             try {
                 const data = JSON.parse(stdout);
-                resolve({ title: data.title, url: data.webpage_url });
+                resolve({
+                    title: data.title,
+                    url: data.webpage_url,
+                    duration: data.duration ? data.duration * 1000 : 0, // in Millisekunden
+                });
             } catch (e) {
                 console.error('Fehler beim Parsen der yt-dlp-Ausgabe:', e);
                 resolve(null);

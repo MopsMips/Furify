@@ -1,5 +1,5 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
-import { queues } from '../core/player';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { FurifyClient } from '../core/client';
 
 export default {
     data: new SlashCommandBuilder()
@@ -7,19 +7,26 @@ export default {
         .setDescription('Zeigt die aktuelle Warteschlange'),
 
     async execute(interaction: ChatInputCommandInteraction) {
+        const client = interaction.client as FurifyClient;
         const guildId = interaction.guildId!;
-        const queue = queues.get(guildId);
+        const queue = client.player.getQueue(guildId);
 
-        if (!queue || queue.length === 0) {
-            await interaction.reply('📭 Die Warteschlange ist leer.');
+        if (!queue || queue.tracks.length === 0) {
+            await interaction.reply({
+                content: '📭 Die Warteschlange ist leer.',
+                flags: MessageFlags.Ephemeral,
+            });
             return;
         }
 
-        const list = queue
-            .map((url, index) => `${index + 1}. ${url}`)
-            .slice(0, 10) // optional: Max. 10 Einträge anzeigen
+        const list = queue.tracks
+            .slice(0, 10) // Max. 10 Einträge anzeigen
+            .map((track, index) => `${index + 1}. [${track.title}](${track.url})`)
             .join('\n');
 
-        await interaction.reply(`📃 **Aktuelle Warteschlange:**\n${list}`);
+        await interaction.reply({
+            content: `📃 **Aktuelle Warteschlange:**\n${list}`,
+            flags: MessageFlags.Ephemeral,
+        });
     },
 };

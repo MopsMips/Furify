@@ -5,7 +5,7 @@ import {
     InteractionReplyOptions,
     MessageFlags
 } from 'discord.js';
-import { players } from '../core/player';
+import { FurifyClient } from '../core/client';
 
 type AnyInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
 
@@ -23,7 +23,10 @@ export default {
             });
         }
 
-        const player = players.get(guild.id);
+        const client = interaction.client as FurifyClient;
+        const guildId = guild.id;
+        const player = (client.player as any).players?.get(guildId);
+
         if (!player) {
             return interaction.reply({
                 content: '⚠️ Es läuft gerade keine Musik.',
@@ -31,14 +34,17 @@ export default {
             });
         }
 
-        // Hier prüfen: ist bereits pausiert?
+        const status = player.state.status;
         let message = '';
-        if (player.state.status === 'paused') {
-            const success = player.unpause?.(); // oder resume(), je nach Implementierung
-            message = success ? '▶️ Wiedergabe fortgesetzt.' : '⚠️ Konnte die Wiedergabe nicht fortsetzen.';
+
+        if (status === 'paused') {
+            const resumed = client.player.resume(guildId);
+            message = resumed ? '▶️ Wiedergabe fortgesetzt.' : '⚠️ Konnte nicht fortsetzen.';
+        } else if (status === 'playing') {
+            const paused = client.player.pause(guildId);
+            message = paused ? '⏸️ Wiedergabe pausiert.' : '⚠️ Konnte nicht pausieren.';
         } else {
-            const success = player.pause();
-            message = success ? '⏸️ Wiedergabe pausiert.' : '⚠️ Konnte die Wiedergabe nicht pausieren.';
+            message = '⚠️ Keine Wiedergabe aktiv.';
         }
 
         const response: InteractionReplyOptions = {

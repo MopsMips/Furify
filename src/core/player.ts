@@ -11,110 +11,203 @@ import {
 import { Readable } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
-
-import { getYtDlpStream } from '../utils/yt-dlp';
+import { getYtDlpStream, getSongFromUrl } from '../utils/yt-dlp';
 import { AUTO_LEAVE_TIMEOUT } from '../config/botConfig';
+import {
+    Client,
+    TextBasedChannel,
+    Message
+} from 'discord.js';
+import { renderPlaybackUI } from '../utils/renderPlaybackUI';
+import { FurifyClient } from './client';
 
 ffmpeg.setFfmpegPath(ffmpegPath!);
 
-// Maps für Verbindungen, Player und Warteschlangen
-export const connections = new Map<string, VoiceConnection>();
-export const players = new Map<string, AudioPlayer>();
-export const queues = new Map<string, string[]>();
+interface Track {
+    title: string;
+    url: string;
+    duration: number;
+}
 
-// 🎵 Nächsten Song aus der Warteschlange abspielen
-export const playNext = (guildId: string) => {
-    const queue = queues.get(guildId);
-    const connection = connections.get(guildId);
-    if (!queue || queue.length === 0 || !connection) return;
+export class Player {
+    private connections = new Map<string, VoiceConnection>();
+    private players = new Map<string, AudioPlayer>();
+    private queues = new Map<string, Track[]>();
+    private currentMessages = new Map<string, Message>();
 
-    const url = queue.shift()!;
-    const yt = getYtDlpStream(url);
+    constructor(private client: Client) { }
 
-    const ffmpegStream = ffmpeg(yt.stdout!)
-        .inputFormat('webm')
-        .audioCodec('libmp3lame')
-        .format('mp3')
-        .on('error', (err) => console.error('FFmpeg Fehler:', err.message));
+    public getQueue(guildId: string): { tracks: { title: string; url: string }[] } | undefined {
+        const queue = this.queues.get(guildId);
+        if (!queue) return undefined;
 
-    const audioStream = ffmpegStream.pipe() as Readable;
-    const resource = createAudioResource(audioStream, {
-        inputType: StreamType.Arbitrary,
-    });
-
-    let player = players.get(guildId);
-    if (!player) {
-        player = createAudioPlayer();
-        players.set(guildId, player);
-        connection.subscribe(player);
+        return {
+            tracks: queue.map(track => ({
+                title: track.title,
+                url: track.url,
+            })),
+        };
     }
 
-    player.play(resource);
+    public async connectAndPlay(
+        voiceChannel: any,
+        url: string,
+        guildId: string,
+        textChannel?: TextBasedChannel
+    ): Promise<'started' | 'queued' | 'failed'> {
+        const connection = joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: guildId,
+            adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+        });
 
-    // Automatisch nächsten Titel spielen oder Bot nach Leerlauf verlassen
-    player.once(AudioPlayerStatus.Idle, () => {
-        setTimeout(() => {
-            const stillIdle = player!.state.status === AudioPlayerStatus.Idle;
-            const isQueueEmpty = !queues.get(guildId)?.length;
+        this.connections.set(guildId, connection);
 
-            if (isQueueEmpty && stillIdle) {
-                player!.stop();
-                getVoiceConnection(guildId)?.destroy();
-                players.delete(guildId);
-                connections.delete(guildId);
-                console.log(`👋 Bot hat den Kanal in Guild ${guildId} verlassen (Auto-Leave).`);
+        const song = await getSongFromUrl(url);
+        if (!song) {
+            console.error('❌ Song konnte nicht geladen werden:', url);
+            return 'failed';
+        }
+
+        if (!this.queues.has(guildId)) {
+            this.queues.set(guildId, []);
+        }
+
+        this.queues.get(guildId)!.push(song);
+
+        const player = this.players.get(guildId);
+        if (!player || player.state.status === AudioPlayerStatus.Idle) {
+            await this.playNext(guildId, textChannel);
+            return 'started';
+        }
+
+        return 'queued';
+    }
+
+    private async playNext(guildId: string, textChannel?: TextBasedChannel) {
+        const queue = this.queues.get(guildId);
+        const connection = this.connections.get(guildId);
+        if (!queue || queue.length === 0 || !connection) return;
+
+        const track = queue.shift()!;
+        const yt = getYtDlpStream(track.url);
+
+        yt.stderr?.on('data', (data) => {
+            console.error(`yt-dlp stderr: ${data}`);
+        });
+
+        if (!yt.stdout) {
+            console.error(`❌ Kein Audio-Stream für ${track.url}`);
+            return;
+        }
+
+        const ffmpegStream = ffmpeg(yt.stdout)
+            .inputFormat('webm')
+            .audioCodec('libmp3lame')
+            .format('mp3')
+            .on('error', (err) => console.error('FFmpeg Fehler:', err.message));
+
+        let audioStream: Readable;
+        try {
+            audioStream = ffmpegStream.pipe() as Readable;
+        } catch (error) {
+            console.error(`❌ Fehler beim Verarbeiten von FFmpeg-Stream:`, error);
+            return;
+        }
+
+        const resource = createAudioResource(audioStream, {
+            inputType: StreamType.Arbitrary,
+        });
+
+        let player = this.players.get(guildId);
+        if (!player) {
+            player = createAudioPlayer();
+            this.players.set(guildId, player);
+            connection.subscribe(player);
+        }
+
+        player.play(resource);
+
+        const oldMsg = this.currentMessages.get(guildId);
+        if (oldMsg) {
+            try {
+                await oldMsg.delete();
+            } catch (e) {
+                console.warn(`⚠️ Alte Nachricht konnte nicht gelöscht werden:`, e);
             }
-        }, AUTO_LEAVE_TIMEOUT);
+        }
 
-        playNext(guildId);
-    });
-};
+        // ✅ sicheres rendern nur wenn .send() verfügbar ist
+        if (
+            textChannel &&
+            'send' in textChannel &&
+            typeof textChannel.send === 'function'
+        ) {
+            try {
+                const newMsg = await renderPlaybackUI(textChannel, track, guildId, this.client as FurifyClient);
+                this.currentMessages.set(guildId, newMsg);
+            } catch (e) {
+                console.warn('⚠️ Konnte neues Playback-UI nicht senden.');
+                console.error(e);
+            }
+        } else {
+            console.warn('⚠️ Kein sendbarer Channel übergeben – UI wird übersprungen.');
+        }
 
-// 🔊 Verbindung herstellen und Song starten
-export const connectAndPlay = async (voiceChannel: any, url: string, guildId: string) => {
-    const connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: guildId,
-        adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-    });
+        player.once(AudioPlayerStatus.Idle, () => {
+            setTimeout(() => {
+                const stillIdle = player.state.status === AudioPlayerStatus.Idle;
+                const isQueueEmpty = !this.queues.get(guildId)?.length;
 
-    connections.set(guildId, connection);
+                if (isQueueEmpty && stillIdle) {
+                    player.stop();
+                    getVoiceConnection(guildId)?.destroy();
+                    this.players.delete(guildId);
+                    this.connections.delete(guildId);
+                    this.currentMessages.delete(guildId);
+                    console.log(`👋 Bot hat den Sprachkanal in Guild ${guildId} verlassen (Auto-Leave).`);
+                }
+            }, AUTO_LEAVE_TIMEOUT);
 
-    if (!queues.has(guildId)) {
-        queues.set(guildId, []);
+            this.playNext(guildId, textChannel);
+        });
     }
 
-    queues.get(guildId)!.push(url);
-
-    playNext(guildId);
-};
-
-// ⏸ Wiedergabe pausieren
-export const pause = (guildId: string): boolean => {
-    const player = players.get(guildId);
-    if (!player) return false;
-
-    if (player.state.status !== AudioPlayerStatus.Playing) return false;
-
-    try {
-        return player.pause();
-    } catch (error) {
-        console.error(`❌ Fehler beim Pausieren in Guild ${guildId}:`, error);
-        return false;
+    public pause(guildId: string): boolean {
+        const player = this.players.get(guildId);
+        if (!player || player.state.status !== AudioPlayerStatus.Playing) return false;
+        try {
+            return player.pause();
+        } catch (error) {
+            console.error(`❌ Fehler beim Pausieren in Guild ${guildId}:`, error);
+            return false;
+        }
     }
-};
 
-// ▶ Wiedergabe fortsetzen
-export const resume = (guildId: string): boolean => {
-    const player = players.get(guildId);
-    if (!player) return false;
-
-    if (player.state.status !== AudioPlayerStatus.Paused) return false;
-
-    try {
-        return player.unpause();
-    } catch (error) {
-        console.error(`❌ Fehler beim Fortsetzen in Guild ${guildId}:`, error);
-        return false;
+    public resume(guildId: string): boolean {
+        const player = this.players.get(guildId);
+        if (!player || player.state.status !== AudioPlayerStatus.Paused) return false;
+        try {
+            return player.unpause();
+        } catch (error) {
+            console.error(`❌ Fehler beim Fortsetzen in Guild ${guildId}:`, error);
+            return false;
+        }
     }
-};
+
+    public skip(guildId: string): boolean {
+        const player = this.players.get(guildId);
+        if (!player) return false;
+        try {
+            player.stop(); // Triggert automatisch playNext()
+            return true;
+        } catch (error) {
+            console.error(`❌ Fehler beim Skippen in Guild ${guildId}:`, error);
+            return false;
+        }
+    }
+
+    public clearQueue(guildId: string): void {
+        this.queues.set(guildId, []);
+    }
+}

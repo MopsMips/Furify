@@ -3,9 +3,10 @@ import {
     ChatInputCommandInteraction,
     MessageComponentInteraction,
     InteractionReplyOptions,
-    MessageFlags
+    MessageFlags,
+    TextChannel
 } from 'discord.js';
-import { players } from '../core/player';
+import { FurifyClient } from '../core/client';
 
 type AnyInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
 
@@ -19,29 +20,31 @@ export default {
         if (!guild) {
             return interaction.reply({
                 content: '❌ Fehler: Kein Server gefunden.',
-                flags: MessageFlags.Ephemeral
+                flags: MessageFlags.Ephemeral,
             });
         }
 
-        const player = players.get(guild.id);
-        if (!player) {
-            return interaction.reply({
-                content: '⚠️ Es läuft gerade keine Musik.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
+        const client = interaction.client as FurifyClient;
+        const success = client.player.skip(guild.id);
 
-        player.stop(); // Springt zum nächsten Song (falls vorhanden)
-
-        const response: InteractionReplyOptions = {
-            content: '⏭️ Song übersprungen!',
-            flags: MessageFlags.Ephemeral
+        const ephemeralResponse: InteractionReplyOptions = {
+            content: success ? '⏭️ Song wurde übersprungen.' : '⚠️ Es läuft gerade keine Musik.',
+            flags: MessageFlags.Ephemeral,
         };
 
         if (interaction.deferred || interaction.replied) {
-            await interaction.followUp(response);
+            await interaction.followUp(ephemeralResponse);
         } else {
-            await interaction.reply(response);
+            await interaction.reply(ephemeralResponse);
+        }
+
+        // Öffentliche Info bei Erfolg senden
+        if (success && interaction.channel && interaction.channel instanceof TextChannel) {
+            try {
+                await interaction.channel.send('⏭️ **Song wurde übersprungen!**');
+            } catch (e) {
+                console.warn('⚠️ Konnte öffentliche Skip-Nachricht nicht senden:', e);
+            }
         }
     },
 };
